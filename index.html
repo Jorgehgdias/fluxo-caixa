@@ -30,10 +30,12 @@ header.band{background:var(--ox);color:#fff;padding-bottom:28px}
 .top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between}
 .top h1{margin:0;font-size:clamp(26px,3.4vw,40px);line-height:1.05;text-wrap:balance;font-weight:800}
 .top p{margin:6px 0 0;color:#c3cde6;font-size:15px}
-.id{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:12px;margin-top:22px;align-items:end}
+.id{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:12px;margin-top:22px;align-items:start}
 .id label{color:#c3cde6}
 .id input{background:#13295e;border-color:#2c4480;color:#fff}
 .id input::placeholder{color:#8495bf}
+.chk{grid-column:1/-1;display:flex;align-items:center;gap:10px;min-height:44px;margin:0;color:#fff;font-size:15px;font-weight:500;cursor:pointer;width:fit-content;max-width:100%}
+.chk input{width:22px;height:22px;flex:none;accent-color:var(--mag);margin:0}
 .cnpjmsg{font-size:13px;min-height:20px;margin-top:4px;color:#c3cde6}
 label{display:block;font-size:13px;font-weight:600;color:var(--mut);margin-bottom:4px}
 input,select{font:inherit;font-size:16px;height:44px;width:100%;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink)}
@@ -120,6 +122,7 @@ body.pv>header,body.pv>main{display:none}body.pv #printView{display:block}
 #pdoc h2{font-size:18px;margin:18px 0 8px}#pdoc .ptab{font-size:12px}#pdoc .ptab th,#pdoc .ptab td{padding:5px 7px}
 #pdoc .ptab th:first-child,#pdoc .ptab td:first-child{position:static;min-width:0}#pdoc .ptab thead th{background:#0b1f4b;color:#fff}
 #pdoc .an{gap:8px}#pdoc .it{padding:10px 12px}#pdoc .it h3{font-size:14px}#pdoc .it p{font-size:12.5px}#pdoc .cols{gap:12px;margin-top:12px}#pdoc .card{padding:12px 14px}#pdoc .sub{font-size:12.5px;margin-bottom:8px}
+#pdoc .psig{width:min(420px,80%);margin:56px auto 8px;text-align:center;break-inside:avoid}#pdoc .psig .ln{border-top:1px solid #0f1a33;margin-bottom:6px}#pdoc .psig b{display:block;font-size:15px}#pdoc .psig span{font-size:12.5px;color:#55607a}
 #pdoc *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 @media(max-width:700px){#pdoc .pk{grid-template-columns:repeat(2,minmax(0,1fr))}#pdoc .phead .r{text-align:left}#pdoc .ptab{display:block;overflow-x:auto}}
 @media print{@page{size:A4 landscape;margin:10mm}
@@ -145,6 +148,7 @@ body.pv>header,body.pv>main{display:none}body.pv #printView{display:block}
    <div><label for="razao">Razão social</label><input id="razao" autocomplete="off" placeholder="Nome empresarial conforme o CNPJ"></div>
    <div><label for="cnpj">CNPJ</label><input id="cnpj" inputmode="numeric" autocomplete="off" placeholder="00.000.000/0000-00"><div class="cnpjmsg" id="cnpjMsg"></div></div>
    <div><label for="dt">Data da análise</label><input id="dt" type="date"><div class="cnpjmsg"></div></div>
+   <label class="chk" for="assin"><input id="assin" type="checkbox"><span>Incluir no PDF campo de assinatura do sócio abaixo do fluxo de caixa</span></label>
   </div>
  </div>
 </header>
@@ -269,7 +273,7 @@ function cnpjOk(c){c=c.replace(/\D/g,'');if(c.length!==14||/^(\d)\1+$/.test(c))r
 function cnpjMsg(){const d=S.cnpj.replace(/\D/g,'');$('cnpjMsg').textContent=!d?'':d.length<14?'CNPJ incompleto':cnpjOk(d)?'✓ CNPJ válido':'Verifique os dígitos do CNPJ'}
 
 /* Inputs */
-function renderHeader(){$('razao').value=S.razao;$('cnpj').value=fmtCnpj(S.cnpj);$('dt').value=S.dt||'';cnpjMsg()}
+function renderHeader(){$('razao').value=S.razao;$('cnpj').value=fmtCnpj(S.cnpj);$('dt').value=S.dt||'';$('assin').checked=!!S.assin;cnpjMsg()}
 function renderMonths(){$('months').innerHTML=S.meses.map((m,i)=>`<div><label for="mv${i}">Mês ${i+1}</label><div class="mrow"><input id="ml${i}" data-i="${i}" class="ml" value="${esc(m.label)}" aria-label="Nome do mês ${i+1}"><div class="pref"><span>R$</span><input id="mv${i}" data-i="${i}" class="mv" inputmode="decimal" value="${m.valor?num(m.valor):''}" placeholder="0,00"></div></div></div>`).join('')}
 function renderExps(){$('exps').innerHTML=S.desp.length?S.desp.map(d=>`<div class="exp" data-id="${d.id}">
  <div class="nmw"><input class="nm" value="${esc(d.nome)}" aria-label="Nome da despesa" placeholder="Descrição da despesa"></div>
@@ -350,6 +354,7 @@ const touch=()=>{S.ex=false;save();renderOut()};
 $('razao').addEventListener('input',e=>{S.razao=e.target.value;save()});
 $('cnpj').addEventListener('input',e=>{const f=fmtCnpj(e.target.value);e.target.value=f;S.cnpj=f.replace(/\D/g,'');cnpjMsg();save()});
 $('dt').addEventListener('input',e=>{S.dt=e.target.value;save()});
+$('assin').addEventListener('change',e=>{S.assin=e.target.checked;save()});
 $('months').addEventListener('input',e=>{const i=+e.target.dataset.i;if(e.target.classList.contains('ml'))S.meses[i].label=e.target.value;else S.meses[i].valor=parse(e.target.value);touch()});
 $('months').addEventListener('focusout',e=>{if(e.target.classList.contains('mv')){const v=S.meses[+e.target.dataset.i].valor;e.target.value=v?num(v):''}});
 {const n=new Date();const d=new Date(n.getFullYear(),n.getMonth()-1,1);$('ultimo').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
@@ -397,15 +402,19 @@ function buildPDF(C,A){
   doc.setTextColor(...(i===2?MG:[15,26,51]));doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(clean(x[1]),X+3,44);doc.setFont('helvetica','normal')});
  const L=S.meses.map(m=>clean(m.label||'-'));const rt=C.recT;const r=(n,v,t)=>[clean(n),...v.map(num),num(t),pct(t/rt*100)].map(clean);
  const body=[r('Receita (faturamento)',C.R,C.recT),...S.desp.map(d=>{const m=C.rows.get(d.id);return r(d.nome||'Sem descrição',m.v,m.tot)}),r('Total de despesas',C.D,C.despT),r('Saldo',C.Sd,C.salT)];
- const last=body.length-1;
+ const last=body.length-1;let tY=60;
  if(typeof doc.autoTable==='function'){doc.autoTable({startY:53,head:[['Despesas',...L,'Total','% Rec.']],body,margin:{left:M,right:M,top:31},theme:'grid',
   styles:{font:'helvetica',fontSize:8.5,cellPadding:1.8,halign:'right',lineColor:[221,226,238],textColor:[15,26,51]},
   headStyles:{fillColor:OX,textColor:255,fontStyle:'bold',halign:'right'},columnStyles:{0:{halign:'left',cellWidth:70}},
   didParseCell:c=>{if(c.section==='head'&&c.column.index===0)c.cell.styles.halign='left';if(c.section!=='body')return;const i=c.row.index;
    if(i===0||i===last||i===last-1){c.cell.styles.fontStyle='bold';if(i!==last-1)c.cell.styles.fillColor=[244,246,251]}
    if(i===last&&c.column.index>0&&c.column.index<=7){const v=c.column.index<=6?C.Sd[c.column.index-1]:C.salT;c.cell.styles.textColor=v<0?[200,16,79]:[11,125,95]}},
-  didDrawPage:()=>{head()}})}
- else{let y=58;doc.setFontSize(8.5);[['Despesas',...L,'Total','% Rec.'],...body].forEach(row=>{row.forEach((c,j)=>doc.text(c,j?M+70+j*22:M,y,j?{align:'right'}:{}));y+=6})}
+  didDrawPage:()=>{head()}});tY=doc.lastAutoTable.finalY}
+ else{let y=58;doc.setFontSize(8.5);[['Despesas',...L,'Total','% Rec.'],...body].forEach(row=>{row.forEach((c,j)=>doc.text(c,j?M+70+j*22:M,y,j?{align:'right'}:{}));y+=6});tY=y}
+ if(S.assin){let y=tY+24;if(y+16>198){doc.addPage();head();y=60}
+  const cx=W/2,lw=110;doc.setDrawColor(15,26,51);doc.setLineWidth(0.3);doc.line(cx-lw/2,y,cx+lw/2,y);
+  doc.setTextColor(15,26,51);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text(doc.splitTextToSize(clean(S.razao||'Razão social não informada'),lw+40),cx,y+5,{align:'center'});
+  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(85,96,122);doc.text('Sócio / representante legal',cx,y+(doc.splitTextToSize(clean(S.razao||'-'),lw+40).length*4.5)+5,{align:'center'})}
  /* Página de análises */
  doc.addPage();head();let y=36;doc.setTextColor(15,26,51);doc.setFont('helvetica','bold');doc.setFontSize(13);doc.text('Análise da saúde financeira',M,y);
  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(85,96,122);doc.text(clean(`Pontuação ${A.score}/100 - saúde ${A.rot}. Verde: confortável; amarelo: atenção; vermelho: crítico.`),M,y+6);y+=14;
@@ -449,7 +458,7 @@ function renderPrint(){const C=calc();const A=analise(C);const dt=S.dt?S.dt.spli
  const k=C.recT?[['Faturamento médio',brl(C.mean)],['Despesas médias',brl(C.despT/6)],['Saldo médio mensal',brl(C.salT/6)],['Margem líquida',pct(C.salT/C.recT*100)],['Saúde financeira',A?A.score+'/100 · '+A.rot:'-']]:[];
  $('pdoc').innerHTML=`<div class="phead"><div><h1>${esc(S.razao||'Razão social não informada')}</h1><p>CNPJ: ${esc(S.cnpj?fmtCnpj(S.cnpj):'não informado')}</p></div><div class="r"><b>Fluxo de caixa e análise financeira</b><p>Data da análise: ${esc(dt)}</p></div></div>
  <div class="pk">${k.map((x,i)=>`<div><span>${x[0]}</span><b class="${i===2?(C.salT<0?'neg':'mg'):''}">${x[1]}</b></div>`).join('')}</div>
- <h2>Fluxo de caixa (DRE simplificada)</h2><table class="ptab">${tableHTML(calc(),null)}</table>
+ <h2>Fluxo de caixa (DRE simplificada)</h2><table class="ptab">${tableHTML(calc(),null)}</table>${S.assin?`<div class="psig"><div class="ln"></div><b>${esc(S.razao||'Razão social não informada')}</b><span>Sócio / representante legal</span></div>`:''}
  <div class="pbreak"><h2>Análise da saúde financeira</h2>${$('analise').innerHTML}<div class="cols">${$('cols').innerHTML}</div></div>
  <p class="note">Valores declarados pelo cliente, de caráter gerencial e não auditados.</p>`}
 function showPrint(msg){renderPrint();$('pvMsg').textContent=msg;document.body.classList.add('pv');window.scrollTo(0,0);$('pvTitle').focus()}
