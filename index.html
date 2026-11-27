@@ -85,6 +85,10 @@ tr.rec td{font-weight:700;background:var(--soft)}tr.rec td:first-child{backgroun
 tr.tot td{font-weight:700;border-top:2px solid var(--ink)}
 tr.sal td{font-weight:800;font-size:16px;background:var(--soft);border-bottom:0}tr.sal td:first-child{background:var(--soft)}
 td .g{display:block;font-size:12px;color:var(--mut);font-weight:400}
+.ttools{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}#editHint{margin:0 0 10px}
+td.ov{background:light-dark(#fff4d6,#3a2f0a)!important;box-shadow:inset 3px 0 0 var(--warn)}
+#dre.editing td{padding:4px 6px}.ci{height:36px;width:112px;padding:0 8px;text-align:right;font-variant-numeric:tabular-nums;font-size:15px}td.ov .ci{border-color:var(--warn);background:transparent}
+tr.rec .ci{font-weight:700}
 .neg{color:var(--bad)}.pos{color:var(--ok)}
 .an{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .it{border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:14px minmax(0,1fr);gap:4px 12px}
@@ -181,7 +185,9 @@ body.pv>header,body.pv>main{display:none}body.pv #printView{display:block}
 
  <section aria-labelledby="h3t" style="margin-top:8px">
   <h2 id="h3t">3. Fluxo de caixa (DRE simplificada)</h2>
-  <p class="sub">Calculado automaticamente a partir do faturamento e das despesas informadas.</p>
+  <p class="sub">Calculado automaticamente a partir do faturamento e das despesas informadas. Para meses com sazonalidade ou gastos pontuais, ajuste qualquer valor direto no fluxo.</p>
+  <div class="ttools"><button type="button" id="bEdit">Ajustar fluxo manualmente</button><button type="button" id="bReset" hidden>Desfazer ajustes manuais</button></div>
+  <p class="note" id="editHint" hidden>Digite o valor desejado em qualquer célula de receita ou despesa. As células alteradas ficam destacadas; apague o valor de uma despesa para voltar ao cálculo automático. Total e saldo se recalculam sozinhos.</p>
   <div class="scroll"><table id="dre"></table></div>
  </section>
 
@@ -273,11 +279,11 @@ function renderExps(){$('exps').innerHTML=S.desp.length?S.desp.map(d=>`<div clas
  <button type="button" class="del" aria-label="Remover despesa">×</button>
  <div class="prev"></div></div>`).join(''):'<p class="empty">Nenhuma despesa. Adicione as despesas da empresa.</p>';updatePrev()}
 function updatePrev(){const C=calc();document.querySelectorAll('.exp').forEach(el=>{const d=S.desp.find(x=>x.id==el.dataset.id);if(!d)return;const m=C.rows.get(d.id);
- el.querySelector('.prev').textContent=C.recT?`Média ${brl(m.tot/6)}/mês · ${pct(m.tot/C.recT*100)} do faturamento`:`Média ${brl(m.tot/6)}/mês`})}
+ const nv=Object.keys(d.ov||{}).length;el.querySelector('.prev').textContent=(C.recT?`Média ${brl(m.tot/6)}/mês · ${pct(m.tot/C.recT*100)} do faturamento`:`Média ${brl(m.tot/6)}/mês`)+(nv?` · ${nv} ${nv>1?'meses ajustados':'mês ajustado'} no fluxo`:'')})}
 
 /* Cálculo */
 function calc(){const R=S.meses.map(m=>m.valor||0);const rows=new Map();const D=[0,0,0,0,0,0];let F=0,V=0;const G=GRUPOS.map(()=>0);
- S.desp.forEach(d=>{const v=R.map(r=>d.tipo==='pct'?r*d.valor/100:d.valor);v.forEach((x,i)=>D[i]+=x);const tot=v.reduce((a,b)=>a+b,0);rows.set(d.id,{v,tot});G[d.grupo]+=tot;if(d.tipo==='pct')V+=d.valor;else F+=d.valor});
+ S.desp.forEach(d=>{const ov=d.ov||{};const v=R.map((r,i)=>ov[i]!=null?ov[i]:d.tipo==='pct'?r*d.valor/100:d.valor);v.forEach((x,i)=>D[i]+=x);const tot=v.reduce((a,b)=>a+b,0);rows.set(d.id,{v,tot});G[d.grupo]+=tot;if(d.tipo==='pct')V+=d.valor;else F+=d.valor});
  const Sd=R.map((r,i)=>r-D[i]);const recT=R.reduce((a,b)=>a+b,0),despT=D.reduce((a,b)=>a+b,0),salT=recT-despT;
  const mean=recT/6;const sd=Math.sqrt(R.reduce((a,r)=>a+(r-mean)**2,0)/6);
  let sx=0,sy=0,sxy=0,sxx=0;R.forEach((r,i)=>{sx+=i;sy+=r;sxy+=i*r;sxx+=i*i});const slope=(6*sxy-sx*sy)/(6*sxx-sx*sx);
@@ -290,12 +296,19 @@ function renderOut(){const C=calc();const sm=C.salT/6;
  const A=analise(C);
  if(A){const col=A.score>=70?'var(--ok)':A.score>=45?'var(--warn)':'var(--bad)';$('rBadge').innerHTML=`<span class="badge"><i style="background:${col}"></i>Situação ${A.rot} · ${A.score}/100</span>`}else $('rBadge').innerHTML='';
  renderTable(C);draw();renderAnalise(C,A);updatePrev()}
-function renderTable(C){const L=S.meses.map(m=>m.label||'-');const rt=C.recT||1;
- const row=(cls,nome,v,tot,sub)=>`<tr class="${cls}"><td>${nome}${sub?`<span class="g">${sub}</span>`:''}</td>${v.map(x=>`<td class="${cls==='sal'?(x<0?'neg':'pos'):''}">${num(x)}</td>`).join('')}<td class="${cls==='sal'?(tot<0?'neg':'pos'):''}">${num(tot)}</td><td>${C.recT?pct(tot/rt*100):'-'}</td></tr>`;
+let editMode=false;
+const nAjustes=()=>S.desp.reduce((a,d)=>a+Object.keys(d.ov||{}).length,0);
+function tableHTML(C,edit){const L=S.meses.map(m=>m.label||'-');const rt=C.recT||1;
+ const cell=(x,k,ov,cls)=>edit&&k?`<td class="${ov?'ov':''}"><input class="ci" data-k="${k}" inputmode="decimal" value="${num(x)}" aria-label="Valor"></td>`:`<td class="${cls}${ov&&edit!==null?' ov':''}">${num(x)}</td>`;
+ const row=(cls,nome,v,tot,sub,keys,ovs)=>`<tr class="${cls}"><td>${nome}${sub?`<span class="g">${sub}</span>`:''}</td>${v.map((x,i)=>cell(x,keys&&keys[i],ovs&&ovs[i],cls==='sal'?(x<0?'neg':'pos'):'')).join('')}<td class="${cls==='sal'?(tot<0?'neg':'pos'):''}">${num(tot)}</td><td>${C.recT?pct(tot/rt*100):'-'}</td></tr>`;
  let h=`<thead><tr><th>Despesas</th>${L.map(l=>`<th>${esc(l)}</th>`).join('')}<th>Total</th><th>% Rec.</th></tr></thead><tbody>`;
- h+=row('rec','Receita (faturamento)',C.R,C.recT);
- S.desp.forEach(d=>{const m=C.rows.get(d.id);h+=row('',esc(d.nome||'Sem descrição'),m.v,m.tot,(d.tipo==='pct'?pct(d.valor,2)+' do faturamento':'Fixo mensal')+' · '+GRUPOS[d.grupo])});
- h+=row('tot','Total de despesas',C.D,C.despT);h+=row('sal','Saldo',C.Sd,C.salT);$('dre').innerHTML=h+'</tbody>'}
+ h+=row('rec','Receita (faturamento)',C.R,C.recT,'',C.R.map((_,i)=>'r-'+i));
+ S.desp.forEach(d=>{const m=C.rows.get(d.id);const ov=d.ov||{};const nv=Object.keys(ov).length;
+  h+=row('',esc(d.nome||'Sem descrição'),m.v,m.tot,(d.tipo==='pct'?'Variável':'Fixo')+' · '+GRUPOS[d.grupo]+(nv&&edit!==null?' · ajustada manualmente':''),m.v.map((_,i)=>'d-'+d.id+'-'+i),m.v.map((_,i)=>ov[i]!=null))});
+ h+=row('tot','Total de despesas',C.D,C.despT);h+=row('sal','Saldo',C.Sd,C.salT);return h+'</tbody>'}
+function renderTable(C){$('dre').innerHTML=tableHTML(C,editMode);$('dre').classList.toggle('editing',editMode);
+ const n=nAjustes();$('bEdit').textContent=editMode?'Concluir ajustes':'Ajustar fluxo manualmente';$('bEdit').classList.toggle('pri',editMode);
+ $('bReset').hidden=!n;$('bReset').textContent=`Desfazer ajustes manuais (${n})`;$('editHint').hidden=!editMode}
 function st(v,good,warn,hi=true){return hi?(v>=good?'ok':v>=warn?'warn':'bad'):(v<=good?'ok':v<=warn?'warn':'bad')}
 function analise(C){if(!C.recT)return null;const it=[];const rt=C.recT;const L=S.meses.map(m=>m.label);
  const mg=C.salT/rt*100;it.push({t:'Margem líquida',v:pct(mg),s:st(mg,10,0),d:`De cada R$ 100 faturados, sobram ${brl(mg)} após todas as despesas.`});
@@ -355,6 +368,19 @@ let armed=false;
 $('bClear').addEventListener('click',e=>{if(!armed){armed=true;e.target.textContent='Confirmar limpeza';setTimeout(()=>{armed=false;e.target.textContent='Limpar dados'},4000);return}
  armed=false;e.target.textContent='Limpar dados';S=defaultState(false);renderAll();save();toast('Dados limpos. Pronto para um novo cliente.')});
 
+/* Ajustes manuais no fluxo */
+$('bEdit').addEventListener('click',()=>{editMode=!editMode;renderTable(calc());if(editMode)document.querySelector('#dre .ci')?.focus()});
+$('bReset').addEventListener('click',()=>{S.desp.forEach(d=>delete d.ov);touch();toast('Ajustes manuais desfeitos. O fluxo voltou ao cálculo automático.')});
+$('dre').addEventListener('change',e=>{const t=e.target;if(!t.classList.contains('ci'))return;const k=t.dataset.k.split('-');const raw=t.value.trim();
+ if(k[0]==='r'){S.meses[+k[1]].valor=parse(raw);renderMonths()}
+ else{const d=S.desp.find(x=>x.id==k[1]);if(!d)return;const i=+k[2];d.ov=d.ov||{};
+  const auto=d.tipo==='pct'?(S.meses[i].valor||0)*d.valor/100:d.valor;const v=parse(raw);
+  if(raw===''||Math.abs(v-auto)<0.005)delete d.ov[i];else d.ov[i]=v;if(!Object.keys(d.ov).length)delete d.ov}
+ setTimeout(()=>{const a=document.activeElement;const key=a&&a.classList&&a.classList.contains('ci')?a.dataset.k:null;touch();
+  if(key){const n=document.querySelector(`#dre .ci[data-k="${key}"]`);if(n){n.focus();n.select()}}},0)});
+$('dre').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.classList.contains('ci')){e.preventDefault();e.target.blur()}});
+$('dre').addEventListener('focusin',e=>{if(e.target.classList.contains('ci'))e.target.select()});
+
 /* PDF */
 const clean=s=>String(s).replace(/ | /g,' ').replace(/[✓·]/g,m=>m==='·'?'-':'');
 function buildPDF(C,A){
@@ -370,7 +396,7 @@ function buildPDF(C,A){
  const kw=(W-2*M-4*4)/5;k.forEach((x,i)=>{const X=M+i*(kw+4);doc.setDrawColor(221,226,238);doc.roundedRect(X,31,kw,17,2,2);doc.setTextColor(85,96,122);doc.setFontSize(8.5);doc.text(x[0],X+3,36.5);
   doc.setTextColor(...(i===2?MG:[15,26,51]));doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text(clean(x[1]),X+3,44);doc.setFont('helvetica','normal')});
  const L=S.meses.map(m=>clean(m.label||'-'));const rt=C.recT;const r=(n,v,t)=>[clean(n),...v.map(num),num(t),pct(t/rt*100)].map(clean);
- const body=[r('Receita (faturamento)',C.R,C.recT),...S.desp.map(d=>{const m=C.rows.get(d.id);return r((d.nome||'Sem descrição')+(d.tipo==='pct'?' ('+pct(d.valor,2)+')':''),m.v,m.tot)}),r('Total de despesas',C.D,C.despT),r('Saldo',C.Sd,C.salT)];
+ const body=[r('Receita (faturamento)',C.R,C.recT),...S.desp.map(d=>{const m=C.rows.get(d.id);return r(d.nome||'Sem descrição',m.v,m.tot)}),r('Total de despesas',C.D,C.despT),r('Saldo',C.Sd,C.salT)];
  const last=body.length-1;
  if(typeof doc.autoTable==='function'){doc.autoTable({startY:53,head:[['Despesas',...L,'Total','% Rec.']],body,margin:{left:M,right:M,top:31},theme:'grid',
   styles:{font:'helvetica',fontSize:8.5,cellPadding:1.8,halign:'right',lineColor:[221,226,238],textColor:[15,26,51]},
@@ -423,7 +449,7 @@ function renderPrint(){const C=calc();const A=analise(C);const dt=S.dt?S.dt.spli
  const k=C.recT?[['Faturamento médio',brl(C.mean)],['Despesas médias',brl(C.despT/6)],['Saldo médio mensal',brl(C.salT/6)],['Margem líquida',pct(C.salT/C.recT*100)],['Saúde financeira',A?A.score+'/100 · '+A.rot:'-']]:[];
  $('pdoc').innerHTML=`<div class="phead"><div><h1>${esc(S.razao||'Razão social não informada')}</h1><p>CNPJ: ${esc(S.cnpj?fmtCnpj(S.cnpj):'não informado')}</p></div><div class="r"><b>Fluxo de caixa e análise financeira</b><p>Data da análise: ${esc(dt)}</p></div></div>
  <div class="pk">${k.map((x,i)=>`<div><span>${x[0]}</span><b class="${i===2?(C.salT<0?'neg':'mg'):''}">${x[1]}</b></div>`).join('')}</div>
- <h2>Fluxo de caixa (DRE simplificada)</h2><table class="ptab">${$('dre').innerHTML}</table>
+ <h2>Fluxo de caixa (DRE simplificada)</h2><table class="ptab">${tableHTML(calc(),null)}</table>
  <div class="pbreak"><h2>Análise da saúde financeira</h2>${$('analise').innerHTML}<div class="cols">${$('cols').innerHTML}</div></div>
  <p class="note">Valores declarados pelo cliente, de caráter gerencial e não auditados.</p>`}
 function showPrint(msg){renderPrint();$('pvMsg').textContent=msg;document.body.classList.add('pv');window.scrollTo(0,0);$('pvTitle').focus()}
