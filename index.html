@@ -403,18 +403,21 @@ function buildPDF(C,A){
  const L=S.meses.map(m=>clean(m.label||'-'));const rt=C.recT;const r=(n,v,t)=>[clean(n),...v.map(num),num(t),pct(t/rt*100)].map(clean);
  const body=[r('Receita (faturamento)',C.R,C.recT),...S.desp.map(d=>{const m=C.rows.get(d.id);return r(d.nome||'Sem descrição',m.v,m.tot)}),r('Total de despesas',C.D,C.despT),r('Saldo',C.Sd,C.salT)];
  const last=body.length-1;let tY=60;
+ /* Com assinatura: compacta a tabela para que fluxo + assinatura caibam na 1ª página */
+ let fs=8.5,pad=1.8;if(S.assin){const nR=body.length+1,avail=177-53;
+  for(fs=8.5;fs>6;fs-=0.5){pad=(avail/nR-fs*1.15*0.3528)/2;if(pad>=0.7)break}pad=Math.max(0.4,Math.min(1.8,pad))}
  if(typeof doc.autoTable==='function'){doc.autoTable({startY:53,head:[['Despesas',...L,'Total','% Rec.']],body,margin:{left:M,right:M,top:31},theme:'grid',
-  styles:{font:'helvetica',fontSize:8.5,cellPadding:1.8,halign:'right',lineColor:[221,226,238],textColor:[15,26,51]},
-  headStyles:{fillColor:OX,textColor:255,fontStyle:'bold',halign:'right'},columnStyles:{0:{halign:'left',cellWidth:70}},
+  styles:{font:'helvetica',fontSize:fs,cellPadding:pad,halign:'right',lineColor:[221,226,238],textColor:[15,26,51]},
+  headStyles:{fillColor:OX,textColor:255,fontStyle:'bold',halign:'right'},columnStyles:{0:{halign:'left',cellWidth:84}},
   didParseCell:c=>{if(c.section==='head'&&c.column.index===0)c.cell.styles.halign='left';if(c.section!=='body')return;const i=c.row.index;
    if(i===0||i===last||i===last-1){c.cell.styles.fontStyle='bold';if(i!==last-1)c.cell.styles.fillColor=[244,246,251]}
    if(i===last&&c.column.index>0&&c.column.index<=7){const v=c.column.index<=6?C.Sd[c.column.index-1]:C.salT;c.cell.styles.textColor=v<0?[200,16,79]:[11,125,95]}},
   didDrawPage:()=>{head()}});tY=doc.lastAutoTable.finalY}
- else{let y=58;doc.setFontSize(8.5);[['Despesas',...L,'Total','% Rec.'],...body].forEach(row=>{row.forEach((c,j)=>doc.text(c,j?M+70+j*22:M,y,j?{align:'right'}:{}));y+=6});tY=y}
- if(S.assin){let y=tY+24;if(y+16>198){doc.addPage();head();y=60}
-  const cx=W/2,lw=110;doc.setDrawColor(15,26,51);doc.setLineWidth(0.3);doc.line(cx-lw/2,y,cx+lw/2,y);
-  doc.setTextColor(15,26,51);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text(doc.splitTextToSize(clean(S.razao||'Razão social não informada'),lw+40),cx,y+5,{align:'center'});
-  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(85,96,122);doc.text('Sócio / representante legal',cx,y+(doc.splitTextToSize(clean(S.razao||'-'),lw+40).length*4.5)+5,{align:'center'})}
+ else{let y=58;const st=S.assin?Math.min(6,(177-58)/(body.length+1)):6;doc.setFontSize(Math.min(8.5,st*1.4));[['Despesas',...L,'Total','% Rec.'],...body].forEach(row=>{row.forEach((c,j)=>doc.text(c,j?M+84+j*21:M,y,j?{align:'right'}:{}));y+=st});tY=y}
+ /* Campo de assinatura: logo abaixo do fluxo, só a linha e a razão social */
+ if(S.assin){const y=Math.min(tY+16,195);const cx=W/2,lw=110;
+  doc.setDrawColor(15,26,51);doc.setLineWidth(0.3);doc.line(cx-lw/2,y,cx+lw/2,y);
+  doc.setTextColor(15,26,51);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text(clean(S.razao||'Razão social não informada'),cx,y+5,{align:'center',maxWidth:lw+60});doc.setFont('helvetica','normal')}
  /* Página de análises */
  doc.addPage();head();let y=36;doc.setTextColor(15,26,51);doc.setFont('helvetica','bold');doc.setFontSize(13);doc.text('Análise da saúde financeira',M,y);
  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(85,96,122);doc.text(clean(`Pontuação ${A.score}/100 - saúde ${A.rot}. Verde: confortável; amarelo: atenção; vermelho: crítico.`),M,y+6);y+=14;
@@ -458,7 +461,7 @@ function renderPrint(){const C=calc();const A=analise(C);const dt=S.dt?S.dt.spli
  const k=C.recT?[['Faturamento médio',brl(C.mean)],['Despesas médias',brl(C.despT/6)],['Saldo médio mensal',brl(C.salT/6)],['Margem líquida',pct(C.salT/C.recT*100)],['Saúde financeira',A?A.score+'/100 · '+A.rot:'-']]:[];
  $('pdoc').innerHTML=`<div class="phead"><div><h1>${esc(S.razao||'Razão social não informada')}</h1><p>CNPJ: ${esc(S.cnpj?fmtCnpj(S.cnpj):'não informado')}</p></div><div class="r"><b>Fluxo de caixa e análise financeira</b><p>Data da análise: ${esc(dt)}</p></div></div>
  <div class="pk">${k.map((x,i)=>`<div><span>${x[0]}</span><b class="${i===2?(C.salT<0?'neg':'mg'):''}">${x[1]}</b></div>`).join('')}</div>
- <h2>Fluxo de caixa (DRE simplificada)</h2><table class="ptab">${tableHTML(calc(),null)}</table>${S.assin?`<div class="psig"><div class="ln"></div><b>${esc(S.razao||'Razão social não informada')}</b><span>Sócio / representante legal</span></div>`:''}
+ <h2>Fluxo de caixa (DRE simplificada)</h2><table class="ptab">${tableHTML(calc(),null)}</table>${S.assin?`<div class="psig"><div class="ln"></div><b>${esc(S.razao||'Razão social não informada')}</b></div>`:''}
  <div class="pbreak"><h2>Análise da saúde financeira</h2>${$('analise').innerHTML}<div class="cols">${$('cols').innerHTML}</div></div>
  <p class="note">Valores declarados pelo cliente, de caráter gerencial e não auditados.</p>`}
 function showPrint(msg){renderPrint();$('pvMsg').textContent=msg;document.body.classList.add('pv');window.scrollTo(0,0);$('pvTitle').focus()}
